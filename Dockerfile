@@ -1,13 +1,5 @@
-FROM python:3.12-slim
+FROM rocketride/engine:v1.0.1
 
-WORKDIR /app
+COPY pipelines/ /pipelines/
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY src/ src/
-COPY pipelines/ pipelines/
-
-# TODO: Add RocketRide engine setup in Phase 1
-
-CMD ["python", "-m", "src.main"]
+EXPOSE 5565

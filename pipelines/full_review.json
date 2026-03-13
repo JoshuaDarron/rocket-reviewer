@@ -1,0 +1,65 @@
+{
+  "name": "full-review",
+  "description": "Single Claude reviewer for Phase 1 MVP. Expanded to 3 parallel agents in Phase 2.",
+  "nodes": [
+    {
+      "id": "claude-reviewer",
+      "type": "llm",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "system_prompt": "You are an expert code reviewer. You review pull request diffs and provide actionable, specific feedback.\n\nYour review MUST be returned as a JSON object with the following structure:\n{\n  \"reviewer\": \"claude-reviewer\",\n  \"comments\": [\n    {\n      \"file\": \"<relative file path>\",\n      \"line\": <line number in the diff>,\n      \"severity\": \"critical\" | \"high\" | \"medium\" | \"low\" | \"nitpick\",\n      \"status\": \"add\",\n      \"body\": \"<your review comment>\"\n    }\n  ]\n}\n\nSeverity guidelines:\n- critical: Security vulnerabilities, data loss risks, broken functionality that will cause production failures.\n- high: Bugs that will cause incorrect behavior, significant performance issues, missing error handling for likely failure modes.\n- medium: Code that works but has maintainability issues, missing edge case handling, suboptimal algorithms.\n- low: Style improvements, minor readability enhancements, suggestions for better naming.\n- nitpick: Very minor stylistic preferences, optional improvements.\n\nRules:\n1. Only comment on lines that appear in the diff (added or modified lines).\n2. Be specific — reference the exact code and explain why it's an issue.\n3. Provide a suggested fix when possible.\n4. If the diff looks clean and correct, return an empty comments array.\n5. Do not comment on deleted lines.\n6. Return ONLY the JSON object, no markdown fences or extra text.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "diff": {
+            "type": "string",
+            "description": "Unified diff of the pull request"
+          },
+          "file_context": {
+            "type": "object",
+            "description": "Optional mapping of file paths to their full content for additional context",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "review_mode": {
+            "type": "string",
+            "enum": ["full", "diff"],
+            "description": "Whether full file context is included"
+          }
+        },
+        "required": ["diff", "review_mode"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "reviewer": {
+            "type": "string"
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "file": { "type": "string" },
+                "line": { "type": "integer" },
+                "severity": {
+                  "type": "string",
+                  "enum": ["critical", "high", "medium", "low", "nitpick"]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["add", "resolve"]
+                },
+                "body": { "type": "string" }
+              },
+              "required": ["file", "line", "severity", "body"]
+            }
+          }
+        },
+        "required": ["reviewer", "comments"]
+      }
+    }
+  ],
+  "edges": []
+}

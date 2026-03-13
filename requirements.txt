@@ -1,4 +1,5 @@
 PyGithub>=2.1.1
 httpx>=0.27.0
 pydantic>=2.5.0
+pyyaml>=6.0
 rocketride>=1.0.0
