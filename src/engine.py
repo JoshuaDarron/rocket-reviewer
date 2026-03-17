@@ -1,7 +1,7 @@
 """RocketRide engine lifecycle management.
 
-Handles starting the Docker container, health check polling, SDK
-connection, and teardown. Exposed as an async context manager.
+Handles downloading the server binary, launching it as a subprocess,
+health check polling, and teardown. Exposed as an async context manager.
 """
 
 from __future__ import annotations
@@ -9,12 +9,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import subprocess
+import tarfile
+import tempfile
 import time
+from pathlib import Path
 from types import TracebackType
 
 import httpx
 
 from src.config import (
+    ENGINE_BINARY_DIR,
+    ENGINE_DOWNLOAD_URL,
     ENGINE_HEALTH_CHECK_INTERVAL,
     ENGINE_HEALTH_CHECK_TIMEOUT,
     ENGINE_PORT,
@@ -23,48 +28,97 @@ from src.errors import EngineError
 
 logger = logging.getLogger(__name__)
 
-ENGINE_IMAGE = "rocketride/engine:v1.0.1"
+_TERMINATE_GRACE_PERIOD: float = 5.0
 
 
 class EngineManager:
-    """Manages the RocketRide engine Docker container lifecycle.
+    """Manages the RocketRide engine server binary lifecycle.
 
-    Use as an async context manager to ensure proper startup and cleanup:
+    Downloads the server binary on first use, launches it as a subprocess,
+    and cleans up on exit. Use as an async context manager:
 
         async with EngineManager() as engine:
             # engine is healthy and ready
             ...
     """
 
-    def __init__(self, image: str = ENGINE_IMAGE, port: int = ENGINE_PORT) -> None:
-        self._image = image
+    def __init__(self, port: int = ENGINE_PORT) -> None:
         self._port = port
-        self._container_id: str | None = None
+        self._process: subprocess.Popen[str] | None = None
+        self._binary_dir = Path(ENGINE_BINARY_DIR)
 
-    async def start(self) -> None:
-        """Start the RocketRide engine Docker container.
+    async def _download_and_extract(self) -> Path:
+        """Download and extract the server binary tarball.
+
+        Skips the download if the binary directory already exists and
+        contains files. Returns the path to the extracted directory.
 
         Raises:
-            EngineError: If Docker fails to start the container.
+            EngineError: If the download or extraction fails.
         """
+        if self._binary_dir.exists() and any(self._binary_dir.iterdir()):
+            logger.info("Server binary already exists at %s", self._binary_dir)
+            return self._binary_dir
+
+        logger.info("Downloading RocketRide server from %s", ENGINE_DOWNLOAD_URL)
         try:
-            result = subprocess.run(
-                [
-                    "docker",
-                    "run",
-                    "-d",
-                    "-p",
-                    f"{self._port}:{self._port}",
-                    self._image,
-                ],
-                capture_output=True,
+            async with httpx.AsyncClient(follow_redirects=True) as client:
+                response = await client.get(ENGINE_DOWNLOAD_URL, timeout=120.0)
+                response.raise_for_status()
+        except httpx.HTTPError as e:
+            msg = f"Failed to download server binary: {e}"
+            raise EngineError(msg) from e
+
+        try:
+            self._binary_dir.mkdir(parents=True, exist_ok=True)
+
+            with tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False) as tmp:
+                tmp.write(response.content)
+                tmp_path = Path(tmp.name)
+
+            with tarfile.open(tmp_path, "r:gz") as tar:
+                tar.extractall(path=self._binary_dir)
+
+            tmp_path.unlink()
+        except (tarfile.TarError, OSError) as e:
+            msg = f"Failed to extract server binary: {e}"
+            raise EngineError(msg) from e
+
+        logger.info("Extracted server binary to %s", self._binary_dir)
+        return self._binary_dir
+
+    def _find_binary(self) -> Path:
+        """Locate the server binary in the extracted directory.
+
+        Raises:
+            EngineError: If no executable binary is found.
+        """
+        for candidate in self._binary_dir.rglob("rocketride-server*"):
+            if candidate.is_file():
+                return candidate
+
+        msg = f"Server binary not found in {self._binary_dir}"
+        raise EngineError(msg)
+
+    async def start(self) -> None:
+        """Download the binary (if needed) and launch the server process.
+
+        Raises:
+            EngineError: If the download, extraction, or process launch fails.
+        """
+        await self._download_and_extract()
+        binary = self._find_binary()
+
+        try:
+            self._process = subprocess.Popen(
+                [str(binary), "--port", str(self._port)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                check=True,
             )
-            self._container_id = result.stdout.strip()
-            logger.info("Started engine container: %s", self._container_id[:12])
-        except subprocess.CalledProcessError as e:
-            msg = f"Failed to start engine container: {e.stderr}"
+            logger.info("Started engine server (PID %d)", self._process.pid)
+        except OSError as e:
+            msg = f"Failed to start engine server: {e}"
             raise EngineError(msg) from e
 
     async def wait_for_healthy(self) -> None:
@@ -96,24 +150,30 @@ class EngineManager:
         raise EngineError(msg)
 
     async def stop(self) -> None:
-        """Stop and remove the Docker container.
+        """Terminate the server process.
 
-        Best-effort — errors are logged but not raised.
+        Sends SIGTERM first and waits briefly. If the process is still
+        alive after the grace period, sends SIGKILL. Errors are logged
+        but not raised.
         """
-        if self._container_id is None:
+        if self._process is None:
             return
 
-        for cmd in (
-            ["docker", "stop", self._container_id],
-            ["docker", "rm", self._container_id],
-        ):
+        pid = self._process.pid
+        try:
+            self._process.terminate()
             try:
-                subprocess.run(cmd, capture_output=True, text=True, check=True)
-            except subprocess.CalledProcessError:
-                logger.warning("Failed to run: %s", " ".join(cmd))
+                self._process.wait(timeout=_TERMINATE_GRACE_PERIOD)
+                logger.info("Engine server (PID %d) terminated gracefully", pid)
+            except subprocess.TimeoutExpired:
+                logger.warning("Engine server (PID %d) did not terminate, killing", pid)
+                self._process.kill()
+                self._process.wait(timeout=5.0)
+                logger.info("Engine server (PID %d) killed", pid)
+        except OSError:
+            logger.warning("Failed to stop engine server (PID %d)", pid)
 
-        logger.info("Stopped engine container: %s", self._container_id[:12])
-        self._container_id = None
+        self._process = None
 
     async def __aenter__(self) -> EngineManager:
         """Start the engine and wait for it to become healthy."""

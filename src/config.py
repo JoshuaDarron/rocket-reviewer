@@ -81,6 +81,15 @@ DEFAULT_IGNORE_PATTERNS: list[str] = [
     "*.eot",
 ]
 
+# RocketRide server binary settings
+ENGINE_VERSION: str = "v3.1.0"
+ENGINE_DOWNLOAD_URL: str = (
+    "https://github.com/rocketride-org/rocketride-server/releases/download/"
+    f"server-{ENGINE_VERSION}-prerelease/"
+    f"rocketride-server-{ENGINE_VERSION}-linux-x64.tar.gz"
+)
+ENGINE_BINARY_DIR: str = "/tmp/rocketride-server"
+
 # Engine health check settings
 ENGINE_HEALTH_CHECK_INTERVAL: float = 2.0
 ENGINE_HEALTH_CHECK_TIMEOUT: float = 30.0
