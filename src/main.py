@@ -14,6 +14,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 from src.aggregator import deduplicate_reviews
 from src.config import AGENT_CREDENTIALS, AGENT_ROUTING, BOT_USERNAMES, load_config
@@ -29,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def should_run(
-    event: dict[str, object], event_name: str, config: ReviewConfig
+    event: dict[str, Any], event_name: str, config: ReviewConfig
 ) -> str | None:
     """Check whether and how the action should proceed based on the event.
 
@@ -53,7 +54,7 @@ def should_run(
 
 
 def _check_pull_request_event(
-    event: dict[str, object], config: ReviewConfig
+    event: dict[str, Any], config: ReviewConfig
 ) -> str | None:
     """Check whether a pull_request event should trigger a full review.
 
@@ -91,7 +92,7 @@ def _check_pull_request_event(
     return "full_review"
 
 
-def _check_review_comment_event(event: dict[str, object]) -> str | None:
+def _check_review_comment_event(event: dict[str, Any]) -> str | None:
     """Check whether a pull_request_review_comment event should trigger a reply.
 
     Validates that the comment is a reply to a bot's review comment and
@@ -336,7 +337,7 @@ async def _post_summary_comment(client: GitHubClient, message: str) -> None:
         logger.exception("Failed to post summary comment")
 
 
-def _identify_target_agent(event: dict[str, object]) -> tuple[str, int, int] | None:
+def _identify_target_agent(event: dict[str, Any]) -> tuple[str, int, int] | None:
     """Identify which agent should respond to a review comment reply.
 
     Looks at the ``in_reply_to_id`` on the comment to determine which
@@ -369,7 +370,7 @@ def _identify_target_agent(event: dict[str, object]) -> tuple[str, int, int] | N
     return str(comment_body), int(in_reply_to_id), int(comment_id)
 
 
-def _format_thread_context(thread: list[dict[str, object]]) -> str:
+def _format_thread_context(thread: list[dict[str, Any]]) -> str:
     """Format a comment thread into a readable conversation string.
 
     Args:
@@ -387,7 +388,7 @@ def _format_thread_context(thread: list[dict[str, object]]) -> str:
 
 
 async def _handle_conversation_reply(
-    event: dict[str, object],
+    event: dict[str, Any],
     repo_name: str,
     pr_number: int,
 ) -> None:
@@ -422,7 +423,7 @@ async def _handle_conversation_reply(
     parent_author: str | None = None
     parent_path: str = ""
     for rc in review_comments:
-        if int(rc["id"]) == in_reply_to_id:  # type: ignore[arg-type]
+        if int(rc["id"]) == in_reply_to_id:
             parent_author = str(rc["user"])
             parent_path = str(rc.get("path", ""))
             break
@@ -482,7 +483,7 @@ async def _handle_conversation_reply(
 
 
 async def _handle_full_review(
-    event: dict[str, object],
+    event: dict[str, Any],
     config: ReviewConfig,
 ) -> None:
     """Handle a full multi-agent review.
@@ -492,9 +493,8 @@ async def _handle_full_review(
         config: Loaded review configuration.
     """
     pr_data = event.get("pull_request", {})
-    repo_name = event.get("repository", {}).get("full_name", "")  # type: ignore[union-attr]
-    pr_number = pr_data.get("number", 0)  # type: ignore[union-attr]
-
+    repo_name = event.get("repository", {}).get("full_name", "")
+    pr_number = pr_data.get("number", 0)
     if not repo_name or not pr_number:
         logger.error("Could not determine repo name or PR number from event")
         return
@@ -650,9 +650,8 @@ async def run() -> None:
         if mode == "full_review":
             await _handle_full_review(event, config)
         elif mode == "conversation":
-            repo_name = event.get("repository", {}).get("full_name", "")  # type: ignore[union-attr]
-            pr_number = event.get("pull_request", {}).get("number", 0)  # type: ignore[union-attr]
-
+            repo_name = event.get("repository", {}).get("full_name", "")
+            pr_number = event.get("pull_request", {}).get("number", 0)
             # For review comment events, PR number may be in the payload differently
             if not pr_number:
                 issue = event.get("issue", {})

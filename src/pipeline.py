@@ -60,7 +60,7 @@ class PipelineRunner:
 
         pipeline_def = pipeline_path.read_text(encoding="utf-8")
 
-        input_data = {
+        input_data: dict[str, object] = {
             "diff": diff,
             "review_mode": review_mode,
         }

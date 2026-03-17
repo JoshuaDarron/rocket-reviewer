@@ -8,6 +8,7 @@ submitting review statuses.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 from github import Auth, GithubIntegration
@@ -52,7 +53,11 @@ class GitHubClient:
         self._pr_number = pr_number
         self._repo = self._gh.get_repo(repo_name)
         self._pr = self._repo.get_pull(pr_number)
-        self._token = self._gh.requester.auth.token
+        auth = self._gh.requester.auth
+        if auth is None:
+            msg = f"GitHub App {app_id} authentication returned no auth token"
+            raise ConfigurationError(msg)
+        self._token: str = auth.token
 
     async def get_pr_diff(self) -> str:
         """Fetch the unified diff for a pull request.
@@ -77,7 +82,7 @@ class GitHubClient:
             msg = f"Failed to fetch diff for PR #{self._pr_number}: {e}"
             raise DiffRetrievalError(msg) from e
 
-    async def get_pr_metadata(self) -> dict[str, object]:
+    async def get_pr_metadata(self) -> dict[str, Any]:
         """Fetch PR metadata.
 
         Returns:
@@ -101,6 +106,9 @@ class GitHubClient:
             The decoded file content as a string.
         """
         contents = self._repo.get_contents(path, ref=self._pr.head.sha)
+        if isinstance(contents, list):
+            msg = f"Expected a single file at {path}, got a directory listing"
+            raise DiffRetrievalError(msg)
         return contents.decoded_content.decode("utf-8")
 
     async def post_review_comment(
@@ -147,14 +155,14 @@ class GitHubClient:
             msg = f"Failed to submit review with status {status}: {e}"
             raise ReviewSubmissionError(msg) from e
 
-    async def get_review_comments(self) -> list[dict[str, object]]:
+    async def get_review_comments(self) -> list[dict[str, Any]]:
         """Fetch all review comments on the pull request.
 
         Returns:
             List of comment dicts with ``id``, ``user``, ``body``,
             ``path``, ``line``, and ``in_reply_to_id`` fields.
         """
-        comments: list[dict[str, object]] = []
+        comments: list[dict[str, Any]] = []
         for comment in self._pr.get_review_comments():
             comments.append(
                 {
@@ -168,7 +176,7 @@ class GitHubClient:
             )
         return comments
 
-    async def get_comment_thread(self, comment_id: int) -> list[dict[str, object]]:
+    async def get_comment_thread(self, comment_id: int) -> list[dict[str, Any]]:
         """Fetch the comment thread for a given review comment.
 
         Retrieves the parent comment and all replies in the same thread.
@@ -183,8 +191,8 @@ class GitHubClient:
 
         # Find the root comment (the one without in_reply_to_id, or the
         # target of in_reply_to_id chains)
-        comment_map: dict[int, dict[str, object]] = {
-            int(c["id"]): c for c in all_comments  # type: ignore[arg-type]
+        comment_map: dict[int, dict[str, Any]] = {
+            int(c["id"]): c for c in all_comments
         }
 
         # Find the root of the thread containing comment_id
@@ -200,21 +208,21 @@ class GitHubClient:
             if current is None:
                 break
             parent_id = current.get("in_reply_to_id")
-            if parent_id is None or int(parent_id) not in comment_map:  # type: ignore[arg-type]
+            if parent_id is None or int(parent_id) not in comment_map:
                 break
             if root_id in visited:
                 break
             visited.add(root_id)
-            root_id = int(parent_id)  # type: ignore[arg-type]
+            root_id = int(parent_id)
 
         # Collect all comments in this thread (root + replies to root)
-        thread: list[dict[str, object]] = []
+        thread: list[dict[str, Any]] = []
         if root_id in comment_map:
             thread.append(comment_map[root_id])
         for c in all_comments:
             reply_to = c.get("in_reply_to_id")
-            c_id = int(c["id"])  # type: ignore[arg-type]
-            if reply_to is not None and int(reply_to) == root_id and c_id != root_id:  # type: ignore[arg-type]
+            c_id = int(c["id"])
+            if reply_to is not None and int(reply_to) == root_id and c_id != root_id:
                 thread.append(c)
 
         return thread

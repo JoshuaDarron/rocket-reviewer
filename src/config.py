@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import ValidationError
@@ -120,7 +121,7 @@ def load_config(repo_root: Path | None = None) -> ReviewConfig:
     if repo_root is None:
         repo_root = Path.cwd()
 
-    config_data: dict[str, object] = {}
+    config_data: dict[str, Any] = {}
 
     # Load from YAML file if it exists
     config_path_str = os.environ.get("INPUT_CONFIG_PATH", ".rocketride-review.yml")
