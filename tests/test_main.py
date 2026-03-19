@@ -398,8 +398,10 @@ class TestHandleConversationReply:
         assert "None" in call_args.args[1]  # reply text
 
     @pytest.mark.asyncio()
-    async def test_agent_not_available_graceful_failure(self) -> None:
-        """If no agents can be initialized, handle gracefully."""
+    async def test_agent_not_available_raises(self) -> None:
+        """If no agents can be initialized, raise ConfigurationError."""
+        from src.errors import ConfigurationError
+
         event = {
             "action": "created",
             "comment": {
@@ -410,11 +412,16 @@ class TestHandleConversationReply:
             },
         }
 
-        with patch(
-            "src.main._initialize_agents",
-            return_value=({}, ["claude-reviewer", "gpt-reviewer", "gemini-reviewer"]),
+        with (
+            patch(
+                "src.main._initialize_agents",
+                return_value=(
+                    {},
+                    ["claude-reviewer", "gpt-reviewer", "gemini-reviewer"],
+                ),
+            ),
+            pytest.raises(ConfigurationError),
         ):
-            # Should not raise
             await _handle_conversation_reply(event, "owner/repo", 42)
 
     @pytest.mark.asyncio()
@@ -691,10 +698,13 @@ class TestRunOrchestration:
     """Integration-style tests for the run() function."""
 
     @pytest.mark.asyncio()
-    async def test_missing_event_path_exits_cleanly(self) -> None:
+    async def test_missing_event_path_exits_with_error(self) -> None:
         env = {"GITHUB_EVENT_PATH": "", "GITHUB_EVENT_NAME": ""}
-        with patch.dict(os.environ, env, clear=True):
-            await run()  # Should not raise
+        with (
+            patch.dict(os.environ, env, clear=True),
+            pytest.raises(SystemExit, match="1"),
+        ):
+            await run()
 
     @pytest.mark.asyncio()
     async def test_wrong_event_type_exits_cleanly(self, tmp_path: Path) -> None:
@@ -750,7 +760,7 @@ class TestRunOrchestration:
         assert "ignore patterns" in call_args.args[0]
 
     @pytest.mark.asyncio()
-    async def test_engine_failure_exits_cleanly(
+    async def test_engine_failure_exits_with_error(
         self, tmp_path: Path, pr_opened_event: dict[str, object]
     ) -> None:
         event_file = tmp_path / "event.json"
@@ -789,10 +799,14 @@ class TestRunOrchestration:
                 "src.main.EngineManager",
                 side_effect=EngineError("Docker not available"),
             ),
+            pytest.raises(SystemExit, match="1"),
         ):
-            await run()  # Should not raise
+            await run()
 
+        # Summary comment is posted before the error propagates
         mock_client.post_issue_comment.assert_called()
+        call_args = mock_client.post_issue_comment.call_args
+        assert "engine" in call_args.args[0].lower()
 
     @pytest.mark.asyncio()
     async def test_oversized_pr_posts_summary(
@@ -1010,10 +1024,10 @@ class TestAgentFailureIsolation:
         assert mock_post.call_count == 2
 
     @pytest.mark.asyncio()
-    async def test_no_agents_initialized_aborts(
+    async def test_no_agents_initialized_exits_with_error(
         self, tmp_path: Path, pr_opened_event: dict[str, object]
     ) -> None:
-        """If no agents could be initialized, abort without crashing."""
+        """If no agents could be initialized, exit with error code."""
         event_file = tmp_path / "event.json"
         event_file.write_text(json.dumps(pr_opened_event))
 
@@ -1032,5 +1046,6 @@ class TestAgentFailureIsolation:
                     ["claude-reviewer", "gpt-reviewer", "gemini-reviewer"],
                 ),
             ),
+            pytest.raises(SystemExit, match="1"),
         ):
-            await run()  # Should not raise
+            await run()

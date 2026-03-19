@@ -112,11 +112,11 @@ rocketride-reviewer/
 
 ## Error Handling
 
-This is a CI tool. It must never crash the developer's pipeline. Every error is either recovered from or reported gracefully.
+This is a CI tool. Errors are reported gracefully (PR comments where possible), and the action exits with code 1 on failure so the GitHub check accurately reflects the result. Whether a failed review blocks merging is controlled by the repo's branch protection settings, not by the action itself.
 
 ### Core principles
 
-1. **Never raise unhandled exceptions in `main.py`.** The top-level entry point wraps everything in a try/except that catches `Exception`, logs the error, posts a summary comment on the PR if possible, and exits with code 0 (not 1). A crashed review should not block a merge.
+1. **Exit honestly.** The top-level entry point in `main.py` catches all exceptions, logs the error, posts a summary comment on the PR if possible, and exits with code 1. This ensures the GitHub check shows red on failure. Repo owners control whether this check is required for merging via branch protection rules.
 
 2. **Agent failures are independent.** If one LLM agent fails (API timeout, rate limit, malformed response), the other two must still complete. Use individual try/except blocks per agent, not a shared one. Log the failure. Post a comment on the PR noting which agent was unavailable (e.g., "GPT reviewer was unavailable for this review due to an API timeout.").
 
@@ -328,5 +328,5 @@ If `black --check` fails, run `black src/ tests/` to auto-format, then re-run th
 - **Do not catch bare `Exception` anywhere except `main.py`'s top-level handler.** Catch specific exceptions everywhere else.
 - **Do not log or print API keys, tokens, or private keys.** Ever. Not even partially masked.
 - **Do not add persistent state (databases, files written to the repo, external services).** v1 is stateless. Every run is independent.
-- **Do not block CI.** The action exits with code 0 in all cases. Review failures are reported as PR comments, not as failed CI steps.
+- **Exit honestly.** The action exits with code 1 on failure so checks reflect reality. Whether the check blocks merging is controlled by branch protection settings, not the action.
 - **Do not hardcode model names or API endpoints.** These should be configurable or at minimum defined as constants in a single location, not scattered through the codebase.

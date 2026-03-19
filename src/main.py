@@ -2,9 +2,8 @@
 
 Reads the GitHub event payload, checks trigger conditions (target branch,
 event type, comment author), and orchestrates the multi-agent review
-pipeline or single-agent conversation reply. The top-level handler catches
-all exceptions, logs errors, posts a summary comment if possible, and
-always exits with code 0.
+pipeline or single-agent conversation reply. On failure, exits with
+code 1 so the GitHub check accurately reflects the error.
 """
 
 from __future__ import annotations
@@ -13,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -411,8 +411,9 @@ async def _handle_conversation_reply(
     # We'll initialize a "lookup" client from the first available agent.
     all_clients, _ = _initialize_agents(repo_name, pr_number)
     if not all_clients:
-        logger.error("No agents could be initialized — cannot handle conversation")
-        return
+        msg = "No agents could be initialized — cannot handle conversation"
+        logger.error(msg)
+        raise ConfigurationError(msg)
 
     lookup_client = next(iter(all_clients.values()))
 
@@ -496,15 +497,17 @@ async def _handle_full_review(
     repo_name = event.get("repository", {}).get("full_name", "")
     pr_number = pr_data.get("number", 0)
     if not repo_name or not pr_number:
-        logger.error("Could not determine repo name or PR number from event")
-        return
+        msg = "Could not determine repo name or PR number from event"
+        logger.error(msg)
+        raise RuntimeError(msg)
 
     # Initialize all agents
     agent_clients, agent_failures = _initialize_agents(repo_name, pr_number)
 
     if not agent_clients:
-        logger.error("No agents could be initialized — aborting review")
-        return
+        msg = "No agents could be initialized — aborting review"
+        logger.error(msg)
+        raise ConfigurationError(msg)
 
     # Use first available client as primary for diff fetching
     primary_client = next(iter(agent_clients.values()))
@@ -569,7 +572,7 @@ async def _handle_full_review(
             "RocketRide engine could not start. Review was not performed. "
             "See workflow logs for details.",
         )
-        return
+        raise
     except Exception as e:
         logger.error("Pipeline failure: %s", e)
         await _post_summary_comment(
@@ -577,7 +580,7 @@ async def _handle_full_review(
             "RocketRide Reviewer encountered an error during review. "
             "See workflow logs for details.",
         )
-        return
+        raise
 
     # Merge pipeline failures into agent failures
     agent_failures.extend(pipeline_failures)
@@ -618,9 +621,8 @@ async def _handle_full_review(
 async def run() -> None:
     """Execute the review action based on the GitHub event.
 
-    This is the top-level entry point. It catches all exceptions, logs
-    errors, posts a summary comment on the PR if possible, and always
-    exits with code 0 so that a failed review never blocks CI.
+    This is the top-level entry point. On failure, logs the error and
+    exits with code 1 so the GitHub check accurately reflects the result.
     """
     logging.basicConfig(
         level=logging.INFO,
@@ -634,7 +636,7 @@ async def run() -> None:
 
         if not event_path or not Path(event_path).is_file():
             logger.error("GITHUB_EVENT_PATH not set or file missing")
-            return
+            sys.exit(1)
 
         event = json.loads(Path(event_path).read_text(encoding="utf-8"))
 
@@ -668,14 +670,16 @@ async def run() -> None:
                 logger.error(
                     "Could not determine repo name or PR number for conversation"
                 )
-                return
+                sys.exit(1)
 
             await _handle_conversation_reply(event, repo_name, int(pr_number))
         else:
             logger.error("Unknown mode: %s", mode)
+            sys.exit(1)
 
     except Exception:
         logger.exception("Review failed with unexpected error")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
