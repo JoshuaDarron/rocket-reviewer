@@ -134,20 +134,23 @@ class EngineManager:
                 timeout window.
         """
         url = f"http://localhost:{self._port}/health"
-        deadline = time.monotonic() + ENGINE_HEALTH_CHECK_TIMEOUT
+        start_time = time.monotonic()
+        deadline = start_time + ENGINE_HEALTH_CHECK_TIMEOUT
 
         async with httpx.AsyncClient() as client:
             while time.monotonic() < deadline:
                 try:
                     response = await client.get(url, timeout=5.0)
                     if response.status_code == 200:
-                        logger.info("Engine is healthy")
+                        elapsed = time.monotonic() - start_time
+                        logger.info("Engine is healthy (took %.1fs to start)", elapsed)
                         return
                 except httpx.HTTPError:
                     pass
                 await asyncio.sleep(ENGINE_HEALTH_CHECK_INTERVAL)
 
-        msg = f"Engine did not become healthy within {ENGINE_HEALTH_CHECK_TIMEOUT}s"
+        elapsed = time.monotonic() - start_time
+        msg = f"Engine did not become healthy within {elapsed:.1f}s"
         raise EngineError(msg)
 
     async def stop(self) -> None:

@@ -92,7 +92,7 @@ ENGINE_BINARY_DIR: str = "/tmp/rocketride-server"
 
 # Engine health check settings
 ENGINE_HEALTH_CHECK_INTERVAL: float = 2.0
-ENGINE_HEALTH_CHECK_TIMEOUT: float = 30.0
+ENGINE_HEALTH_CHECK_TIMEOUT: float = 300.0
 ENGINE_PORT: int = 5565
 
 # Retry settings

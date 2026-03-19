@@ -237,8 +237,9 @@ class TestEngineHealthCheck:
             patch("src.engine.time.monotonic") as mock_time,
             patch("src.engine.httpx.AsyncClient") as mock_client_cls,
         ):
-            # Simulate time passing beyond timeout
-            mock_time.side_effect = [0.0, 31.0]
+            # Simulate time passing beyond timeout:
+            # 1st call: start_time, 2nd call: deadline check, 3rd call: elapsed
+            mock_time.side_effect = [0.0, 301.0, 301.0]
 
             mock_client_cls.return_value.__aenter__ = AsyncMock(
                 return_value=mock_client
