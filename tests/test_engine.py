@@ -129,6 +129,26 @@ class TestEngineFindBinary:
         result = engine._find_binary()
         assert result == binary
 
+    def test_finds_engine_binary(self, tmp_path: Path) -> None:
+        engine = EngineManager()
+        engine._binary_dir = tmp_path
+        binary = tmp_path / "engine"
+        binary.touch()
+
+        result = engine._find_binary()
+        assert result == binary
+
+    def test_finds_engine_binary_in_subdirectory(self, tmp_path: Path) -> None:
+        engine = EngineManager()
+        engine._binary_dir = tmp_path
+        subdir = tmp_path / "bin"
+        subdir.mkdir()
+        binary = subdir / "engine"
+        binary.touch()
+
+        result = engine._find_binary()
+        assert result == binary
+
     def test_raises_when_no_binary_found(self, tmp_path: Path) -> None:
         engine = EngineManager()
         engine._binary_dir = tmp_path

@@ -93,9 +93,10 @@ class EngineManager:
         Raises:
             EngineError: If no executable binary is found.
         """
-        for candidate in self._binary_dir.rglob("rocketride-server*"):
-            if candidate.is_file():
-                return candidate
+        for pattern in ("engine", "engine.exe", "rocketride-server*"):
+            for candidate in self._binary_dir.rglob(pattern):
+                if candidate.is_file():
+                    return candidate
 
         msg = f"Server binary not found in {self._binary_dir}"
         raise EngineError(msg)
