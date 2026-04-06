@@ -537,6 +537,40 @@ class TestHandleConversationReply:
             await _handle_conversation_reply(event, "owner/repo", 42)
 
 
+class TestHandleFullReviewValidation:
+    """Tests for input validation in _handle_full_review."""
+
+    @pytest.mark.asyncio()
+    async def test_missing_repo_raises_configuration_error(self) -> None:
+        """Missing repo name raises ConfigurationError, not RuntimeError."""
+        from src.errors import ConfigurationError
+        from src.main import _handle_full_review as handle_review
+
+        event: dict[str, object] = {
+            "pull_request": {"number": 42},
+            "repository": {"full_name": ""},
+        }
+        config = ReviewConfig()
+
+        with pytest.raises(ConfigurationError, match="Could not determine"):
+            await handle_review(event, config)
+
+    @pytest.mark.asyncio()
+    async def test_missing_pr_number_raises_configuration_error(self) -> None:
+        """Missing PR number raises ConfigurationError, not RuntimeError."""
+        from src.errors import ConfigurationError
+        from src.main import _handle_full_review as handle_review
+
+        event: dict[str, object] = {
+            "pull_request": {"number": 0},
+            "repository": {"full_name": "owner/repo"},
+        }
+        config = ReviewConfig()
+
+        with pytest.raises(ConfigurationError, match="Could not determine"):
+            await handle_review(event, config)
+
+
 class TestExtractChangedFiles:
     """Tests for _extract_changed_files()."""
 

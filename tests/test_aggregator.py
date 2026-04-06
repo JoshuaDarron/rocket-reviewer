@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from src.aggregator import (
     LINE_WINDOW,
+    SIMILARITY_THRESHOLD,
     _is_duplicate,
     deduplicate_reviews,
 )
+from src.config import DEDUP_LINE_WINDOW, DEDUP_SIMILARITY_THRESHOLD
 from src.models import AgentReview, ReviewComment, Severity
 
 
@@ -282,3 +286,23 @@ class TestDeduplicateReviews:
         result = deduplicate_reviews(reviews)
         assert len(result) == 2
         assert all(len(r.comments) == 0 for r in result)
+
+
+class TestDedupConfigConstants:
+    """Tests that aggregator constants come from config."""
+
+    def test_line_window_matches_config(self) -> None:
+        assert LINE_WINDOW == DEDUP_LINE_WINDOW
+
+    def test_similarity_threshold_matches_config(self) -> None:
+        assert SIMILARITY_THRESHOLD == DEDUP_SIMILARITY_THRESHOLD
+
+    def test_custom_line_window_changes_behavior(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Monkeypatching config changes dedup behavior."""
+        # With a window of 0, same-file comments 2 lines apart are NOT duplicates
+        monkeypatch.setattr("src.aggregator.LINE_WINDOW", 0)
+        a = ReviewComment(file="a.py", line=10, severity=Severity.HIGH, body="Bug here")
+        b = ReviewComment(file="a.py", line=12, severity=Severity.HIGH, body="Bug here")
+        assert not _is_duplicate(a, b)

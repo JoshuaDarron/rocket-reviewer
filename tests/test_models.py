@@ -54,6 +54,55 @@ class TestReviewComment:
                 body="Bad severity.",
             )
 
+    def test_empty_file_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ReviewComment(file="", line=1, severity=Severity.LOW, body="Issue.")
+
+    def test_absolute_path_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ReviewComment(
+                file="/etc/passwd", line=1, severity=Severity.LOW, body="Issue."
+            )
+
+    def test_path_traversal_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ReviewComment(
+                file="../../../etc/passwd", line=1, severity=Severity.LOW, body="Issue."
+            )
+
+    def test_relative_path_with_dotdot_in_dir(self) -> None:
+        with pytest.raises(ValidationError):
+            ReviewComment(
+                file="src/../../secret.py", line=1, severity=Severity.LOW, body="Issue."
+            )
+
+    def test_valid_nested_path(self) -> None:
+        comment = ReviewComment(
+            file="src/utils/helpers.py",
+            line=10,
+            severity=Severity.LOW,
+            body="Suggestion.",
+        )
+        assert comment.file == "src/utils/helpers.py"
+
+    def test_body_max_length(self) -> None:
+        with pytest.raises(ValidationError):
+            ReviewComment(
+                file="test.py",
+                line=1,
+                severity=Severity.LOW,
+                body="x" * 65537,
+            )
+
+    def test_body_at_max_length(self) -> None:
+        comment = ReviewComment(
+            file="test.py",
+            line=1,
+            severity=Severity.LOW,
+            body="x" * 65536,
+        )
+        assert len(comment.body) == 65536
+
 
 class TestAgentReview:
     """Tests for the AgentReview model."""

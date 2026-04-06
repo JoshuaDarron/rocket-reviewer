@@ -45,6 +45,14 @@ class TestShouldIgnore:
     def test_font_files(self) -> None:
         assert should_ignore("fonts/roboto.woff2", ["*.woff2"])
 
+    def test_dist_glob_does_not_match_distributed(self) -> None:
+        """'dist/**' should NOT match 'distributed.js'."""
+        assert not should_ignore("distributed.js", ["dist/**"])
+
+    def test_node_modules_glob_does_not_match_backup(self) -> None:
+        """'node_modules/**' should NOT match 'node_modules_backup/x.js'."""
+        assert not should_ignore("node_modules_backup/x.js", ["node_modules/**"])
+
 
 class TestGetEffectivePatterns:
     """Tests for get_effective_patterns()."""

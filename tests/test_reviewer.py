@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.errors import CommentPostingError
+from src.errors import CommentPostingError, ReviewSubmissionError
 from src.models import AgentReview, ReviewComment, Severity
 from src.reviewer import (
     _build_review_summary,
@@ -212,3 +212,15 @@ class TestPostAgentReview:
 
         call_kwargs = mock_client.submit_review.call_args
         assert call_kwargs.kwargs["status"] == "COMMENT"
+
+    @pytest.mark.asyncio()
+    async def test_submit_review_failure_caught(self) -> None:
+        """ReviewSubmissionError from submit_review is caught, not bare Exception."""
+        review = AgentReview(reviewer="claude-reviewer", comments=[])
+        mock_client = AsyncMock()
+        mock_client.submit_review = AsyncMock(
+            side_effect=ReviewSubmissionError("forbidden")
+        )
+
+        # Should not raise — error is caught and logged
+        await post_agent_review(review, mock_client)

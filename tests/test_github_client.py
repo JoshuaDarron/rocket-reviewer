@@ -67,6 +67,23 @@ class TestGitHubClientInit:
         )
         assert client._pr_number == 42
 
+    def test_empty_installations_raises_configuration_error(self) -> None:
+        with (
+            patch("src.github_client.Auth.AppAuth"),
+            patch("src.github_client.GithubIntegration") as mock_gi_cls,
+        ):
+            mock_gi = MagicMock()
+            mock_gi.get_installations.return_value = []
+            mock_gi_cls.return_value = mock_gi
+
+            with pytest.raises(ConfigurationError, match="has no installations"):
+                GitHubClient(
+                    app_id=12345,
+                    private_key="fake-key",
+                    repo_name="owner/repo",
+                    pr_number=42,
+                )
+
     def test_auth_failure_raises_configuration_error(self) -> None:
         with (
             patch(
