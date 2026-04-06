@@ -8,7 +8,7 @@
   "description": "Single-agent scoped reply to a developer comment in a review thread.",
   "components": [
     {
-      "id": "webhook_1",
+      "id": "reply-input",
       "provider": "webhook",
       "config": {
         "hideForm": true,
@@ -34,7 +34,7 @@
       }
     },
     {
-      "id": "question_1",
+      "id": "reply-prompt",
       "provider": "question",
       "config": {
         "profile": "default",
@@ -59,12 +59,12 @@
       "input": [
         {
           "lane": "text",
-          "from": "webhook_1"
+          "from": "reply-input"
         }
       ]
     },
     {
-      "id": "llm_openai_1",
+      "id": "gpt-reviewer",
       "provider": "llm_openai",
       "config": {
         "profile": "openai-5-2",
@@ -94,12 +94,12 @@
       "input": [
         {
           "lane": "questions",
-          "from": "question_1"
+          "from": "reply-prompt"
         }
       ]
     },
     {
-      "id": "response_answers_1",
+      "id": "response-reply",
       "provider": "response_answers",
       "config": {
         "laneName": "answers"
@@ -123,7 +123,7 @@
       "input": [
         {
           "lane": "answers",
-          "from": "llm_openai_1"
+          "from": "gpt-reviewer"
         }
       ]
     }

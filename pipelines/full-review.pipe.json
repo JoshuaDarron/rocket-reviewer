@@ -8,7 +8,7 @@
   "description": "Three parallel AI reviewers (Claude, GPT, Gemini). Deduplication handled in Python post-processing.",
   "components": [
     {
-      "id": "webhook_1",
+      "id": "review-input",
       "provider": "webhook",
       "config": {
         "hideForm": true,
@@ -34,7 +34,7 @@
       }
     },
     {
-      "id": "question_1",
+      "id": "review-prompt",
       "provider": "question",
       "config": {
         "profile": "default",
@@ -59,12 +59,12 @@
       "input": [
         {
           "lane": "text",
-          "from": "webhook_1"
+          "from": "review-input"
         }
       ]
     },
     {
-      "id": "llm_gemini_1",
+      "id": "gemini-reviewer",
       "provider": "llm_gemini",
       "config": {
         "profile": "gemini-3-pro",
@@ -94,12 +94,12 @@
       "input": [
         {
           "lane": "questions",
-          "from": "question_1"
+          "from": "review-prompt"
         }
       ]
     },
     {
-      "id": "llm_anthropic_1",
+      "id": "claude-reviewer",
       "provider": "llm_anthropic",
       "config": {
         "profile": "claude-sonnet-4-6",
@@ -129,12 +129,12 @@
       "input": [
         {
           "lane": "questions",
-          "from": "question_1"
+          "from": "review-prompt"
         }
       ]
     },
     {
-      "id": "llm_openai_1",
+      "id": "gpt-reviewer",
       "provider": "llm_openai",
       "config": {
         "profile": "openai-5-2",
@@ -164,12 +164,12 @@
       "input": [
         {
           "lane": "questions",
-          "from": "question_1"
+          "from": "review-prompt"
         }
       ]
     },
     {
-      "id": "response_answers_1",
+      "id": "response-claude",
       "provider": "response_answers",
       "config": {
         "laneName": "claude",
@@ -196,12 +196,12 @@
       "input": [
         {
           "lane": "answers",
-          "from": "llm_anthropic_1"
+          "from": "claude-reviewer"
         }
       ]
     },
     {
-      "id": "response_answers_2",
+      "id": "response-openai",
       "provider": "response_answers",
       "config": {
         "laneName": "openai",
@@ -228,12 +228,12 @@
       "input": [
         {
           "lane": "answers",
-          "from": "llm_openai_1"
+          "from": "gpt-reviewer"
         }
       ]
     },
     {
-      "id": "response_answers_3",
+      "id": "response-gemini",
       "provider": "response_answers",
       "config": {
         "laneName": "gemini",
@@ -260,7 +260,7 @@
       "input": [
         {
           "lane": "answers",
-          "from": "llm_gemini_1"
+          "from": "gemini-reviewer"
         }
       ]
     }
